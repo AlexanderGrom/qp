@@ -120,6 +120,28 @@ func TestFormatter_Insert(t *testing.T) {
 	)
 }
 
+func TestFormatter_NewInsert(t *testing.T) {
+	d := [][]interface{}{
+		{1, "Tom", 12},
+		{2, "Huckleberry", 13},
+	}
+	v := New().Jumper(", ")
+	for _, p := range d {
+		v.Format("(%p)", p)
+	}
+	q := Format(
+		"INSERT INTO users (id, name, age) VALUES %s", v,
+	)
+	assert.Equal(t,
+		`INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($4, $5, $6)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1, "Tom", 12, 2, "Huckleberry", 13},
+		q.Params(),
+	)
+}
+
 func TestFormatter_Update1(t *testing.T) {
 	q := Format(
 		"UPDATE table SET (name, age) = (%p) WHERE id = %p",

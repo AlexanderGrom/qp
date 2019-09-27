@@ -49,10 +49,27 @@ func RegisterDriver(name string, driver func() Driver) {
 	drivers[name] = driver
 }
 
+// New returns a new empty formatter
+//		var values = qp.New().Jumper(", ")
+//		values.Format("(%+p)", 1, "Tom", 12)
+//		values.Format("(%+p)", 2, "Huckleberry", 13)
+//
+//		var query = qp.Format("INSERT INTO users (id, name, age) VALUES %s", values)
+//		_ = query.String() // INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($4, $5, $6)
+//		_ = query.Params() // [1, "Tom", 12, 2, "Huckleberry", 13]
+func New() Formatter {
+	return &formatter{
+		format: []string{},
+		params: [][]interface{}{},
+		driver: driver(),
+		jumper: " AND ",
+	}
+}
+
 // Format formats according to a format specifier and returns the sql query string
-//		var q = qp.Format("SELECT id FROM table WHERE name = %p LIMIT %p OFFSET %p", "Tom", 10, 0)
-//		_ = b.String() // SELECT id FROM table WHERE name = $1 LIMIT $2 OFFSET $3
-//		_ = b.Params() // ["Tom", 10, 0]
+//		var query = qp.Format("SELECT id FROM table WHERE name = %p LIMIT %p OFFSET %p", "Tom", 10, 0)
+//		_ = query.String() // SELECT id FROM table WHERE name = $1 LIMIT $2 OFFSET $3
+//		_ = query.Params() // ["Tom", 10, 0]
 func Format(format string, params ...interface{}) Formatter {
 	return &formatter{
 		format: []string{format},

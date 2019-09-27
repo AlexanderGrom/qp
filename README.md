@@ -96,6 +96,17 @@ q := query.String() // INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($
 p := query.Params() // [1, "Tom", 12, 2, "Huckleberry", 13]
 ```
 
+### Insert
+```go
+values := qp.New().Jumper(", ")
+for _, d := range data {
+	values.Format("(%p)", d)
+}
+query := qp.Format("INSERT INTO users (id, name, age) VALUES %s", values)
+q := query.String() // INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($4, $5, $6)
+p := query.Params() // [1, "Tom", 12, 2, "Huckleberry", 13]
+```
+
 ### Filter
 ```go
 type (
