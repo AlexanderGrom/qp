@@ -335,6 +335,21 @@ func TestFormatter_Verbs5(t *testing.T) {
 	)
 }
 
+func TestFormatter_Verbs6(t *testing.T) {
+	q := Format("(%+p)", 1, 2, 3).
+		Format("(%p)", []int{}).
+		Format("(%p)", []int{4, 5, 6}).
+		Jumper(", ")
+	assert.Equal(t,
+		`($1, $2, $3), (), ($4, $5, $6)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1, 2, 3, 4, 5, 6},
+		q.Params(),
+	)
+}
+
 func TestUtils_toString(t *testing.T) {
 	var testCases = []struct {
 		name   string

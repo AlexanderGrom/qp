@@ -29,7 +29,10 @@ func (d *pgsqlDriver) placeholder() int {
 // Placeholder returns string of placeholders
 func (d *pgsqlDriver) Placeholder(x interface{}) string {
 	var n int
-	if n = count(x); n == 1 {
+	switch n = count(x); n {
+	case 0:
+		return ""
+	case 1:
 		return "$" + strconv.Itoa(d.placeholder())
 	}
 
