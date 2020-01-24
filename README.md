@@ -1,5 +1,5 @@
 # qp
-[![Go Report Card](https://goreportcard.com/badge/github.com/alexandergrom/qp)](https://goreportcard.com/report/github.com/alexandergrom/qp) [![GoDoc](https://godoc.org/github.com/alexandergrom/qp?status.svg)](https://godoc.org/github.com/alexandergrom/qp)
+[![Build Status](https://github.com/AlexanderGrom/qp/workflows/main/badge.svg)](https://github.com/AlexanderGrom/qp/actions?workflow=main) [![Go Report Card](https://goreportcard.com/badge/github.com/alexandergrom/qp)](https://goreportcard.com/report/github.com/alexandergrom/qp) [![GoDoc](https://godoc.org/github.com/alexandergrom/qp?status.svg)](https://godoc.org/github.com/alexandergrom/qp)
 
 Package qp is a simple query formatter.
 
