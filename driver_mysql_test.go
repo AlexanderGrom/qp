@@ -12,6 +12,9 @@ func TestMySQL_Placeholder(t *testing.T) {
 	res = MysqlDriver().Placeholder(1)
 	assert.Equal(t, `?`, res)
 
+	res = MysqlDriver().Placeholder([]int{})
+	assert.Equal(t, ``, res)
+
 	res = MysqlDriver().Placeholder([]int{1, 2})
 	assert.Equal(t, `?, ?`, res)
 

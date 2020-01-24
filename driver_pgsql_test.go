@@ -15,6 +15,9 @@ func TestPgSQL_Placeholder(t *testing.T) {
 	res = PgsqlDriver().Placeholder([]byte{'a', 'b', 'c'})
 	assert.Equal(t, `$1`, res)
 
+	res = PgsqlDriver().Placeholder([]int{})
+	assert.Equal(t, ``, res)
+
 	res = PgsqlDriver().Placeholder([]int{1, 2})
 	assert.Equal(t, `$1, $2`, res)
 
