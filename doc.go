@@ -13,7 +13,14 @@
 // 		%p		convert to one placeholder or slice placeholders
 //
 // The modifiers:
-// 		+		capture all parameters
+//   - capture all parameters
+//
+// Indexed arguments:
+//
+//	qp.Format("name = %[1]s OR nickname = %[1]s", "Tom").String() // name = Tom OR nickname = Tom
+//	qp.Format("name = %[1]p OR nickname = %[1]p", "Tom").String() // name = $1 OR nickname = $1
+//	qp.Format("name = %[1]s OR nickname = %[1]s", "Tom").Params() // []
+//	qp.Format("name = %[1]p OR nickname = %[1]p", "Tom").Params() // ["Tom"]
 //
 // Examples:
 // 		qp.Format("name: %s", "Tom Sawyer").String() // name: Tom Sawyer

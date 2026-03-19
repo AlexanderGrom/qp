@@ -1,10 +1,38 @@
 package qp
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+type indexedTestDriver struct {
+	placeholders int
+}
+
+func (d *indexedTestDriver) Placeholder(x interface{}) string {
+	var n int
+	switch n = count(x); n {
+	case 0:
+		return ""
+	case 1:
+		d.placeholders++
+		return "@p" + strconv.Itoa(d.placeholders)
+	}
+
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		d.placeholders++
+		b.WriteString("@p")
+		b.WriteString(strconv.Itoa(d.placeholders))
+	}
+	return b.String()
+}
 
 func TestFormatter_Format(t *testing.T) {
 	b := Format("name = %p", "Tom").Format("subname = %p", "Sawyer")
@@ -68,6 +96,191 @@ func TestFormatter_Driver(t *testing.T) {
 	)
 	assert.Equal(t,
 		[]interface{}{"active", "Tom", 10, 0},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReusePgSQL(t *testing.T) {
+	q := Format(
+		"SELECT %[1]p, %[1]p, %p",
+		"Tom", "Sawyer",
+	)
+	assert.Equal(t,
+		`SELECT $1, $1, $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReuseString(t *testing.T) {
+	q := Format(
+		"name = %[1]s OR nickname = %[1]s",
+		"Tom",
+	)
+	assert.Equal(t,
+		`name = Tom OR nickname = Tom`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReuseMySQL(t *testing.T) {
+	q := Format(
+		"SELECT %[1]p, %[1]p, %p",
+		"Tom", "Sawyer",
+	).Driver(MysqlDriver())
+	assert.Equal(t,
+		`SELECT ?, ?, ?`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom", "Sawyer"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReuseCustomDriver(t *testing.T) {
+	q := Format(
+		"SELECT %[1]p, %[1]p, %p",
+		"Tom", "Sawyer",
+	).Driver(&indexedTestDriver{})
+	assert.Equal(t,
+		`SELECT @p1, @p1, @p2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_ParamsDoesNotAdvanceExplicitDriver(t *testing.T) {
+	q := Format(
+		"SELECT %[1]p, %p",
+		"Tom", "Sawyer",
+	).Driver(PgsqlDriver())
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer"},
+		q.Params(),
+	)
+	assert.Equal(t,
+		`SELECT $1, $2`,
+		q.String(),
+	)
+}
+
+func TestFormatter_MixedIndexedAndSequentialPgSQL(t *testing.T) {
+	q := Format(
+		"first = %p AND second = %[2]p AND third = %p",
+		"Tom", "Sawyer", "Huck",
+	)
+	assert.Equal(t,
+		`first = $1 AND second = $2 AND third = $3`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_MixedIndexedAndSequentialMySQL(t *testing.T) {
+	q := Format(
+		"first = %p AND second = %[2]p AND third = %p",
+		"Tom", "Sawyer", "Huck",
+	).Driver(MysqlDriver())
+	assert.Equal(t,
+		`first = ? AND second = ? AND third = ?`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_MixedIndexedAndSpreadPgSQL(t *testing.T) {
+	q := Format(
+		"%[1]p, %[1]p, %+p",
+		"Tom", "Sawyer", "Huck",
+	)
+	assert.Equal(t,
+		`$1, $1, $2, $3`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_MixedIndexedAndSpreadMySQL(t *testing.T) {
+	q := Format(
+		"%[1]p, %[1]p, %+p",
+		"Tom", "Sawyer", "Huck",
+	).Driver(MysqlDriver())
+	assert.Equal(t,
+		`?, ?, ?, ?`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom", "Sawyer", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_DoubleDigitIndexedPlaceholder(t *testing.T) {
+	params := make([]interface{}, 99)
+	for i := range params {
+		params[i] = i + 1
+	}
+	q := Format(
+		"%p, %[99]p, %[99]p",
+		params...,
+	)
+	assert.Equal(t,
+		`$1, $2, $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1, 99},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReuseSlice(t *testing.T) {
+	q := Format(
+		"id IN (%[1]p) OR parent_id IN (%[1]p)",
+		[]int{1, 2, 3},
+	)
+	assert.Equal(t,
+		`id IN ($1, $2, $3) OR parent_id IN ($1, $2, $3)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1, 2, 3},
+		q.Params(),
+	)
+}
+
+func TestFormatter_PositionalReuseNestedFormatter(t *testing.T) {
+	b := Format("name = %p", "Tom")
+	q := Format(
+		"(%[1]s) OR (%[1]s)",
+		b,
+	)
+	assert.Equal(t,
+		`(name = $1) OR (name = $1)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom"},
 		q.Params(),
 	)
 }

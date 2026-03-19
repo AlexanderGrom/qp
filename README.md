@@ -31,6 +31,12 @@ _ = q.Params() // ["Tom", 18, 21, 30, 10]
 +		capture all parameters
 ```
 
+## Indexed arguments
+```go
+qp.Format("name = %[1]s OR nickname = %[1]s", "Tom").String() // name = Tom OR nickname = Tom
+qp.Format("name = %[1]p OR nickname = %[1]p", "Tom").String() // name = $1 OR nickname = $1
+```
+
 ## Examples
 ```go
 qp.Format("name: %s", "Tom Sawyer").String() // name: Tom Sawyer
