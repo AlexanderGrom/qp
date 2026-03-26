@@ -37,6 +37,10 @@ qp.Format("name = %[1]s OR nickname = %[1]s", "Tom").String() // name = Tom OR n
 qp.Format("name = %[1]p OR nickname = %[1]p", "Tom").String() // name = $1 OR nickname = $1
 ```
 
+## Custom drivers
+If a custom driver keeps internal state, implement `Clone() qp.Driver` as well.
+That lets `Params()` inspect placeholder reuse without mutating the original driver instance.
+
 ## Examples
 ```go
 qp.Format("name: %s", "Tom Sawyer").String() // name: Tom Sawyer

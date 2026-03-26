@@ -2,7 +2,6 @@ package qp
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -16,6 +15,12 @@ type (
 	// Driver interface
 	Driver interface {
 		Placeholder(x interface{}) string
+	}
+
+	// DriverCloner can be implemented by stateful drivers that need qp to
+	// inspect placeholders without mutating the original driver instance.
+	DriverCloner interface {
+		Clone() Driver
 	}
 
 	// Formatter interface
@@ -359,14 +364,8 @@ func cloneDriver(d Driver) Driver {
 	if d == nil {
 		return nil
 	}
-	var v = reflect.ValueOf(d)
-	if v.Kind() != reflect.Ptr || v.IsNil() {
-		return d
-	}
-	var clone = reflect.New(v.Elem().Type())
-	clone.Elem().Set(v.Elem())
-	if driver, ok := clone.Interface().(Driver); ok {
-		return driver
+	if cloneable, ok := d.(DriverCloner); ok {
+		return cloneable.Clone()
 	}
 	return d
 }

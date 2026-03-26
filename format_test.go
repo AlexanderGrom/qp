@@ -12,6 +12,13 @@ type indexedTestDriver struct {
 	placeholders int
 }
 
+func (d *indexedTestDriver) Clone() Driver {
+	if d == nil {
+		return (*indexedTestDriver)(nil)
+	}
+	return &indexedTestDriver{placeholders: d.placeholders}
+}
+
 func (d *indexedTestDriver) Placeholder(x interface{}) string {
 	var n int
 	switch n = count(x); n {
@@ -171,6 +178,21 @@ func TestFormatter_ParamsDoesNotAdvanceExplicitDriver(t *testing.T) {
 	)
 	assert.Equal(t,
 		`SELECT $1, $2`,
+		q.String(),
+	)
+}
+
+func TestFormatter_ParamsDoesNotAdvanceExplicitCustomDriver(t *testing.T) {
+	q := Format(
+		"SELECT %[1]p, %p",
+		"Tom", "Sawyer",
+	).Driver(&indexedTestDriver{})
+	assert.Equal(t,
+		[]interface{}{"Tom", "Sawyer"},
+		q.Params(),
+	)
+	assert.Equal(t,
+		`SELECT @p1, @p2`,
 		q.String(),
 	)
 }
