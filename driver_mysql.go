@@ -17,6 +17,14 @@ func MysqlDriver() Driver {
 	return &mysqlDriver{}
 }
 
+// Clone returns a copy of the driver.
+func (d *mysqlDriver) Clone() Driver {
+	if d == nil {
+		return (*mysqlDriver)(nil)
+	}
+	return &mysqlDriver{}
+}
+
 // Placeholder returns n count placeholders
 func (d *mysqlDriver) Placeholder(x interface{}) string {
 	var n int

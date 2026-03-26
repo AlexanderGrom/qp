@@ -20,6 +20,14 @@ func PgsqlDriver() Driver {
 	return &pgsqlDriver{}
 }
 
+// Clone returns a copy of the driver with its current placeholder state.
+func (d *pgsqlDriver) Clone() Driver {
+	if d == nil {
+		return (*pgsqlDriver)(nil)
+	}
+	return &pgsqlDriver{placeholders: d.placeholders}
+}
+
 // Placeholder returns n count placeholders
 func (d *pgsqlDriver) placeholder() int {
 	d.placeholders++
