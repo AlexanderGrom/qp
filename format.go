@@ -12,12 +12,12 @@ var (
 )
 
 type (
-	// Driver interface
+	// Driver defines placeholder generation for a database driver.
 	Driver interface {
 		Placeholder(x interface{}) string
 	}
 
-	// Formatter interface
+	// Formatter formats query fragments and collects query parameters.
 	Formatter interface {
 		String() string
 		Params() []interface{}
@@ -26,7 +26,7 @@ type (
 		Jumper(jumper string) Formatter
 	}
 
-	// Formatter implements a Formatter interface
+	// formatter implements the Formatter interface.
 	formatter struct {
 		format []string
 		params [][]interface{}
@@ -36,7 +36,7 @@ type (
 	}
 )
 
-// DefaultDriver sets a default driver
+// DefaultDriver sets the default driver.
 func DefaultDriver(name string) {
 	var ok bool
 	if driver, ok = drivers[name]; !ok {
@@ -44,19 +44,20 @@ func DefaultDriver(name string) {
 	}
 }
 
-// RegisterDriver registers a new driver
+// RegisterDriver registers a new driver.
 func RegisterDriver(name string, driver func() Driver) {
 	drivers[name] = driver
 }
 
-// New returns a new empty formatter
-//		var values = qp.New().Jumper(", ")
-//		values.Format("(%+p)", 1, "Tom", 12)
-//		values.Format("(%+p)", 2, "Huckleberry", 13)
+// New returns a new empty formatter.
 //
-//		var query = qp.Format("INSERT INTO users (id, name, age) VALUES %s", values)
-//		_ = query.String() // INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($4, $5, $6)
-//		_ = query.Params() // [1, "Tom", 12, 2, "Huckleberry", 13]
+//	var values = qp.New().Jumper(", ")
+//	values.Format("(%+p)", 1, "Tom", 12)
+//	values.Format("(%+p)", 2, "Huckleberry", 13)
+//
+//	var query = qp.Format("INSERT INTO users (id, name, age) VALUES %s", values)
+//	_ = query.String() // INSERT INTO users (id, name, age) VALUES ($1, $2, $3), ($4, $5, $6)
+//	_ = query.Params() // [1, "Tom", 12, 2, "Huckleberry", 13]
 func New() Formatter {
 	return &formatter{
 		format: []string{},
@@ -66,10 +67,11 @@ func New() Formatter {
 	}
 }
 
-// Format formats according to a format specifier and returns the sql query string
-//		var query = qp.Format("SELECT id FROM table WHERE name = %p LIMIT %p OFFSET %p", "Tom", 10, 0)
-//		_ = query.String() // SELECT id FROM table WHERE name = $1 LIMIT $2 OFFSET $3
-//		_ = query.Params() // ["Tom", 10, 0]
+// Format formats according to a format specifier and returns the SQL query string.
+//
+//	var query = qp.Format("SELECT id FROM table WHERE name = %p LIMIT %p OFFSET %p", "Tom", 10, 0)
+//	_ = query.String() // SELECT id FROM table WHERE name = $1 LIMIT $2 OFFSET $3
+//	_ = query.Params() // ["Tom", 10, 0]
 func Format(format string, params ...interface{}) Formatter {
 	return &formatter{
 		format: []string{format},
@@ -79,62 +81,84 @@ func Format(format string, params ...interface{}) Formatter {
 	}
 }
 
-// String returns a query string
+// String returns the query string.
 func (f *formatter) String() string {
 	defer f.m()
 	var (
 		b strings.Builder
-		p int
-		i int
-		j int
-		l int
-		r bool
-		s bool
+
+		verbLabel  int
+		verbStart  int
+		verbRecord bool
+		verbSpread bool
+
+		reset = func() {
+			verbStart = 0
+			verbLabel = 0
+			verbSpread = false
+			verbRecord = false
+		}
 	)
 	for n, format := range f.format {
+		var labels map[int]int
 		if n > 0 {
 			b.WriteString(f.jumper)
 		}
-		for i, j, p = 0, 0, 0; i < len(format); i++ {
+		var j int
+		for i, p := 0, 0; i < len(format); i++ {
 			switch {
 			case format[i] == '%':
-				if l, r = btoi(!s), !r; !r {
-					b.WriteString(format[j : i-l+1])
-					j = i + 1
-					s = false
+				if verbRecord = !verbRecord; verbRecord {
+					verbStart = i
+					break
 				}
-			case format[i] == '+' && r:
-				s = true
-				l = l + 1
-			case format[i] == 's' && r:
-				if p >= len(f.params[n]) {
-					panic("qp: parameter not found")
+				if verbSpread || verbLabel > 0 {
+					b.WriteString(format[j : i+1])
+				} else {
+					b.WriteString(format[j : verbStart+1])
 				}
-				b.WriteString(format[j : i-l])
-				b.WriteString(f.s(n, p, s))
-				if s {
+				j = i + 1
+				reset()
+			case format[i] == '+' && verbRecord:
+				if verbLabel == 0 {
+					verbSpread = true
+				}
+			case format[i] == '[' && verbRecord:
+				if verbLabel, i = f.parseVerbIndex(format, i); verbLabel > 0 {
+					verbSpread = false
+					break
+				}
+				reset()
+			case format[i] == 's' && verbRecord:
+				var idx = p
+				if verbLabel > 0 {
+					labels, idx = f.bindVerbIndex(labels, verbLabel, p)
+				}
+				f.paramsCheck(n, idx)
+				b.WriteString(format[j:verbStart])
+				b.WriteString(f.s(n, idx, verbSpread))
+				if verbSpread {
 					p = len(f.params[n])
 				}
 				p = p + 1
 				j = i + 1
-				r = false
-				s = false
-			case format[i] == 'p' && r:
-				if p >= len(f.params[n]) {
-					panic("qp: parameter not found")
+				reset()
+			case format[i] == 'p' && verbRecord:
+				var idx = p
+				if verbLabel > 0 {
+					labels, idx = f.bindVerbIndex(labels, verbLabel, p)
 				}
-				b.WriteString(format[j : i-l])
-				b.WriteString(f.p(n, p, s))
-				if s {
+				f.paramsCheck(n, idx)
+				b.WriteString(format[j:verbStart])
+				b.WriteString(f.p(n, idx, verbSpread))
+				if verbSpread {
 					p = len(f.params[n])
 				}
 				p = p + 1
 				j = i + 1
-				r = false
-				s = false
+				reset()
 			default:
-				r = false
-				s = false
+				reset()
 			}
 		}
 		b.WriteString(format[j:])
@@ -142,78 +166,97 @@ func (f *formatter) String() string {
 	return b.String()
 }
 
-// Params returns parameters for query
+// Params returns the query parameters.
 func (f *formatter) Params() []interface{} {
 	var (
 		params = make([]interface{}, 0, len(f.params))
-		record = false
-		spread = false
+
+		verbLabel  int
+		verbSpread bool
+		verbRecord bool
+
+		reset = func() {
+			verbLabel = 0
+			verbSpread = false
+			verbRecord = false
+		}
 	)
 	for n, format := range f.format {
+		var labels map[int]int
 		for i, p := 0, 0; i < len(format); i++ {
 			switch {
 			case format[i] == '%':
-				if record = !record; !record {
-					spread = false
+				if verbRecord = !verbRecord; !verbRecord {
+					reset()
 				}
-			case format[i] == '+' && record:
-				spread = true
-			case format[i] == 's' && record:
-				if p >= len(f.params[n]) {
-					panic("qp: parameter not found")
+			case format[i] == '[' && verbRecord:
+				if verbLabel, i = f.parseVerbIndex(format, i); verbLabel > 0 {
+					verbSpread = false
+					break
 				}
-				if spread {
+				reset()
+			case format[i] == '+' && verbRecord:
+				if verbLabel == 0 {
+					verbSpread = true
+				}
+			case format[i] == 's' && verbRecord:
+				var idx = p
+				if verbLabel > 0 {
+					labels, idx = f.bindVerbIndex(labels, verbLabel, p)
+				}
+				f.paramsCheck(n, idx)
+				if verbSpread {
 					params = filters(params, f.params[n][p:]...)
 					p = len(f.params[n])
 				} else {
-					params = filters(params, f.params[n][p])
+					params = filters(params, f.params[n][idx])
 					p = p + 1
 				}
-				record = false
-				spread = false
-			case format[i] == 'p' && record:
-				if p >= len(f.params[n]) {
-					panic("qp: parameter not found")
+				reset()
+			case format[i] == 'p' && verbRecord:
+				var idx = p
+				if verbLabel > 0 {
+					labels, idx = f.bindVerbIndex(labels, verbLabel, p)
 				}
-				if spread {
+				f.paramsCheck(n, idx)
+				if verbSpread {
 					params = insert(params, f.params[n][p:]...)
 					p = len(f.params[n])
 				} else {
-					params = insert(params, f.params[n][p])
+					params = insert(params, f.params[n][idx])
 					p = p + 1
 				}
-				record = false
-				spread = false
+				reset()
 			default:
-				record = false
-				spread = false
+				reset()
 			}
 		}
 	}
 	return params
 }
 
-// Format formats according to a format specifier and returns the sql query string
+// Format appends another formatted query fragment to the formatter.
 func (f *formatter) Format(format string, params ...interface{}) Formatter {
 	f.params = append(f.params, params)
 	f.format = append(f.format, format)
 	return f
 }
 
-// Driver sets a Driver
+// Driver sets the driver.
 func (f *formatter) Driver(driver Driver) Formatter {
 	f.driver = driver
 	f.master = true
 	return f
 }
 
-// Jumper sets a string concatenator
+// Jumper sets the string used to concatenate fragments.
 // For example: " AND ", " OR ", ", "
 func (f *formatter) Jumper(jumper string) Formatter {
 	f.jumper = jumper
 	return f
 }
 
+// s renders a parameter for the %s verb.
 func (f *formatter) s(n, p int, s bool) string {
 	switch s {
 	case true:
@@ -223,6 +266,7 @@ func (f *formatter) s(n, p int, s bool) string {
 	}
 }
 
+// p renders a parameter for the %p verb.
 func (f *formatter) p(n, p int, s bool) string {
 	switch s {
 	case true:
@@ -232,6 +276,7 @@ func (f *formatter) p(n, p int, s bool) string {
 	}
 }
 
+// d returns the active driver.
 func (f *formatter) d() Driver {
 	if f.driver == nil {
 		f.driver = driver()
@@ -239,13 +284,45 @@ func (f *formatter) d() Driver {
 	return f.driver
 }
 
+// m resets the driver unless the formatter uses a custom driver.
 func (f *formatter) m() {
 	if !f.master {
 		f.driver = driver()
 	}
 }
 
-// ToString converts an interface to string
+// parseVerbIndex parses an indexed verb label and returns the label and the closing bracket index.
+func (f *formatter) parseVerbIndex(format string, i int) (int, int) {
+	var j = i + 1
+	for i = i + 1; i < len(format) && format[i] >= '0' && format[i] <= '9'; {
+		i = i + 1
+	}
+	if i >= len(format) || format[i] != ']' {
+		return 0, i
+	}
+	return atoi(format[j:i]), i
+}
+
+// bindVerbIndex binds a verb label to the current parameter index.
+func (f *formatter) bindVerbIndex(labels map[int]int, label, p int) (map[int]int, int) {
+	if labels == nil {
+		labels = map[int]int{}
+	}
+	if p, ok := labels[label]; ok {
+		return labels, p
+	}
+	labels[label] = p
+	return labels, p
+}
+
+// paramsCheck verifies that a parameter index exists.
+func (f *formatter) paramsCheck(n, p int) {
+	if p >= len(f.params[n]) {
+		panic("qp: parameter not found")
+	}
+}
+
+// toString converts a value to a string.
 func (f *formatter) toString(x interface{}) string {
 	switch x := x.(type) {
 	case string:
@@ -297,8 +374,8 @@ func (f *formatter) toString(x interface{}) string {
 	}
 }
 
-// strings converts []interface to string
-// For example: []interface{"name", "surname", []string{"age"}} => "name, surname, age"
+// strings converts []interface{} to a string.
+// For example: []interface{}{"name", "surname", []string{"age"}} => "name, surname, age"
 func (f *formatter) strings(x []interface{}) string {
 	var n int
 	if n = len(x); n == 0 {

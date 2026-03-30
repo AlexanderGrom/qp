@@ -12,12 +12,12 @@ func init() {
 	RegisterDriver("mysql", MysqlDriver)
 }
 
-// MysqlDriver returns a specific Driver for mysql
+// MysqlDriver returns a Driver for MySQL.
 func MysqlDriver() Driver {
 	return &mysqlDriver{}
 }
 
-// Placeholder returns n count placeholders
+// Placeholder returns one or more MySQL placeholders.
 func (d *mysqlDriver) Placeholder(x interface{}) string {
 	var n int
 	switch n = count(x); n {

@@ -15,18 +15,18 @@ func init() {
 	RegisterDriver("postgres", PgsqlDriver)
 }
 
-// PgsqlDriver returns a specific Driver for postgresql
+// PgsqlDriver returns a Driver for PostgreSQL.
 func PgsqlDriver() Driver {
 	return &pgsqlDriver{}
 }
 
-// Placeholder returns n count placeholders
+// placeholder increments and returns the next placeholder number.
 func (d *pgsqlDriver) placeholder() int {
 	d.placeholders++
 	return d.placeholders
 }
 
-// Placeholder returns string of placeholders
+// Placeholder returns one or more PostgreSQL placeholders.
 func (d *pgsqlDriver) Placeholder(x interface{}) string {
 	var n int
 	switch n = count(x); n {
