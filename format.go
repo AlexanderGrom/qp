@@ -325,13 +325,29 @@ func (f *formatter) paramsCheck(n, p int) {
 	}
 }
 
+// valueStringCap estimates the string size for a value.
+func (f *formatter) valueStringCap(x interface{}) int {
+	if x, ok := x.(Formatter); ok {
+		return x.Driver(f.d()).(*formatter).formatsCap()
+	}
+	return count(x) * 4
+}
+
+// valueParamsCap estimates the parameter count for a value.
+func (f *formatter) valueParamsCap(x interface{}) int {
+	if x, ok := x.(Formatter); ok {
+		return x.(*formatter).paramsCap()
+	}
+	return count(x)
+}
+
 // formatsCap calculates the capacity needed for the query string.
 func (f *formatter) formatsCap() int {
 	var cap int
 	for n := range f.format {
 		cap += len(f.format[n])
 		for _, v := range f.params[n] {
-			cap += count(v) * 4
+			cap += f.valueStringCap(v)
 		}
 	}
 	cap += len(f.jumper) * (len(f.format) - 1)
@@ -343,7 +359,7 @@ func (f *formatter) paramsCap() int {
 	var cap int
 	for _, pp := range f.params {
 		for _, v := range pp {
-			cap += count(v)
+			cap += f.valueParamsCap(v)
 		}
 	}
 	return cap

@@ -657,75 +657,11 @@ func BenchmarkBuilder_FormatString(b *testing.B) {
 	}
 }
 
-func BenchmarkBuilder_FormatString2(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		var where = Format("first_name = %p", "Tom").
-			Format("last_name = %p", "Sawyer").
-			Format("nickname IN (%p)", []string{"Huck", "Tom", "Becky", "Joe Harper"}).
-			Format("age IN (%p)", []int{12, 13, 14, 15}).
-			Format("is_orphan = %p", true).
-			Format("hometown = %p", "St. Petersburg").
-			Format("river = %p", "Mississippi").
-			Format("chapter_id IN (%p)", []int{1, 2, 3, 5, 7, 11, 13, 17, 19, 23}).
-			Format("adventure_type IN (%p)", []string{"treasure hunt", "pirate", "graveyard", "cave exploration"}).
-			Format("is_runaway = %p", false).
-			Format("companion = %p", "Huckleberry Finn").
-			Format("raft_length > %p", 8).
-			Format("island IN (%p)", []string{"Jackson's Island", "Cardiff Hill"}).
-			Format("villain = %p", "Injun Joe").
-			Format("treasure_value > %p", int64(1000)).
-			Format("fence_painted = %p", true).
-			Format("school_id IN (%p)", []int{101, 102, 103}).
-			Format("witness = %p", "Muff Potter").
-			Format("cave_name = %p", "McDougal's Cave").
-			Format("aunt = %p", "Polly").
-			Format("page_count IN (%p)", []int64{35, 42, 56, 78, 91, 120}).
-			Format("is_superstitious = %p", true)
-
-		_ = Format(
-			`SELECT id, first_name, last_name, age, hometown, adventure_type, chapter_id FROM characters WHERE %s ORDER BY %s LIMIT %p OFFSET %p`,
-			where, "last_name", 100, 0,
-		).String()
-	}
-}
-
 func BenchmarkBuilder_FormatParams(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var b = Format("name = %p", "Tom").
 			Format("age = %p", []int64{18, 21, 30})
 
 		_ = Format(`SELECT id FROM table WHERE %s LIMIT %p`, b, 10).Params()
-	}
-}
-
-func BenchmarkBuilder_FormatParams2(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		var where = Format("first_name = %p", "Tom").
-			Format("last_name = %p", "Sawyer").
-			Format("nickname IN (%p)", []string{"Huck", "Tom", "Becky", "Joe Harper"}).
-			Format("age IN (%p)", []int{12, 13, 14, 15}).
-			Format("is_orphan = %p", true).
-			Format("hometown = %p", "St. Petersburg").
-			Format("river = %p", "Mississippi").
-			Format("chapter_id IN (%p)", []int{1, 2, 3, 5, 7, 11, 13, 17, 19, 23}).
-			Format("adventure_type IN (%p)", []string{"treasure hunt", "pirate", "graveyard", "cave exploration"}).
-			Format("is_runaway = %p", false).
-			Format("companion = %p", "Huckleberry Finn").
-			Format("raft_length > %p", 8).
-			Format("island IN (%p)", []string{"Jackson's Island", "Cardiff Hill"}).
-			Format("villain = %p", "Injun Joe").
-			Format("treasure_value > %p", int64(1000)).
-			Format("fence_painted = %p", true).
-			Format("school_id IN (%p)", []int{101, 102, 103}).
-			Format("witness = %p", "Muff Potter").
-			Format("cave_name = %p", "McDougal's Cave").
-			Format("aunt = %p", "Polly").
-			Format("page_count IN (%p)", []int64{35, 42, 56, 78, 91, 120}).
-			Format("is_superstitious = %p", true)
-
-		_ = Format(
-			`SELECT id, first_name, last_name, age, hometown, adventure_type, chapter_id FROM characters WHERE %s ORDER BY %s LIMIT %p OFFSET %p`,
-			where, "last_name", 100, 0,
-		).Params()
 	}
 }
