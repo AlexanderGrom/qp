@@ -99,6 +99,7 @@ func (f *formatter) String() string {
 			verbRecord = false
 		}
 	)
+	b.Grow(f.formatsCap())
 	for n, format := range f.format {
 		var labels map[int]int
 		if n > 0 {
@@ -136,11 +137,12 @@ func (f *formatter) String() string {
 				}
 				f.paramsCheck(n, idx)
 				b.WriteString(format[j:verbStart])
-				b.WriteString(f.s(n, idx, verbSpread))
+				f.writeString(&b, n, idx, verbSpread)
 				if verbSpread {
 					p = len(f.params[n])
+				} else {
+					p = advanceParam(p, idx)
 				}
-				p = p + 1
 				j = i + 1
 				reset()
 			case format[i] == 'p' && verbRecord:
@@ -150,11 +152,12 @@ func (f *formatter) String() string {
 				}
 				f.paramsCheck(n, idx)
 				b.WriteString(format[j:verbStart])
-				b.WriteString(f.p(n, idx, verbSpread))
+				f.writePlaceholder(&b, n, idx, verbSpread)
 				if verbSpread {
 					p = len(f.params[n])
+				} else {
+					p = advanceParam(p, idx)
 				}
-				p = p + 1
 				j = i + 1
 				reset()
 			default:
@@ -169,7 +172,7 @@ func (f *formatter) String() string {
 // Params returns the query parameters.
 func (f *formatter) Params() []interface{} {
 	var (
-		params = make([]interface{}, 0, len(f.params))
+		params = make([]interface{}, 0, f.paramsCap())
 
 		verbLabel  int
 		verbSpread bool
@@ -210,7 +213,7 @@ func (f *formatter) Params() []interface{} {
 					p = len(f.params[n])
 				} else {
 					params = filters(params, f.params[n][idx])
-					p = p + 1
+					p = advanceParam(p, idx)
 				}
 				reset()
 			case format[i] == 'p' && verbRecord:
@@ -224,7 +227,7 @@ func (f *formatter) Params() []interface{} {
 					p = len(f.params[n])
 				} else {
 					params = insert(params, f.params[n][idx])
-					p = p + 1
+					p = advanceParam(p, idx)
 				}
 				reset()
 			default:
@@ -256,23 +259,23 @@ func (f *formatter) Jumper(jumper string) Formatter {
 	return f
 }
 
-// s renders a parameter for the %s verb.
-func (f *formatter) s(n, p int, s bool) string {
+// writeString renders a parameter for the %s verb.
+func (f *formatter) writeString(b *strings.Builder, n, p int, s bool) {
 	switch s {
 	case true:
-		return f.toString(f.params[n][p:])
+		f.toString(b, f.params[n][p:])
 	default:
-		return f.toString(f.params[n][p])
+		f.toString(b, f.params[n][p])
 	}
 }
 
-// p renders a parameter for the %p verb.
-func (f *formatter) p(n, p int, s bool) string {
+// writePlaceholder renders a parameter for the %p verb.
+func (f *formatter) writePlaceholder(b *strings.Builder, n, p int, s bool) {
 	switch s {
 	case true:
-		return f.d().Placeholder(f.params[n][p:])
+		b.WriteString(f.d().Placeholder(f.params[n][p:]))
 	default:
-		return f.d().Placeholder(f.params[n][p])
+		b.WriteString(f.d().Placeholder(f.params[n][p]))
 	}
 }
 
@@ -322,70 +325,92 @@ func (f *formatter) paramsCheck(n, p int) {
 	}
 }
 
+// formatsCap calculates the capacity needed for the query string.
+func (f *formatter) formatsCap() int {
+	var cap int
+	for n := range f.format {
+		cap += len(f.format[n])
+		for _, v := range f.params[n] {
+			cap += count(v) * 4
+		}
+	}
+	cap += len(f.jumper) * (len(f.format) - 1)
+	return cap
+}
+
+// paramsCap calculates the capacity needed for the parameters slice.
+func (f *formatter) paramsCap() int {
+	var cap int
+	for _, pp := range f.params {
+		for _, v := range pp {
+			cap += count(v)
+		}
+	}
+	return cap
+}
+
 // toString converts a value to a string.
-func (f *formatter) toString(x interface{}) string {
+func (f *formatter) toString(b *strings.Builder, x interface{}) {
+	var buf [64]byte
 	switch x := x.(type) {
 	case string:
-		return x
+		b.WriteString(x)
 	case Formatter:
-		return x.Driver(f.d()).String()
+		b.WriteString(x.Driver(f.d()).String())
 	case fmt.Stringer:
-		return x.String()
+		b.WriteString(x.String())
 	case int:
-		return strconv.FormatInt(int64(x), 10)
+		b.Write(strconv.AppendInt(buf[:0], int64(x), 10))
 	case int8:
-		return strconv.FormatInt(int64(x), 10)
+		b.Write(strconv.AppendInt(buf[:0], int64(x), 10))
 	case int16:
-		return strconv.FormatInt(int64(x), 10)
+		b.Write(strconv.AppendInt(buf[:0], int64(x), 10))
 	case int32:
-		return strconv.FormatInt(int64(x), 10)
+		b.Write(strconv.AppendInt(buf[:0], int64(x), 10))
 	case int64:
-		return strconv.FormatInt(int64(x), 10)
+		b.Write(strconv.AppendInt(buf[:0], x, 10))
 	case uint:
-		return strconv.FormatUint(uint64(x), 10)
+		b.Write(strconv.AppendUint(buf[:0], uint64(x), 10))
 	case uint8:
-		return strconv.FormatUint(uint64(x), 10)
+		b.Write(strconv.AppendUint(buf[:0], uint64(x), 10))
 	case uint16:
-		return strconv.FormatUint(uint64(x), 10)
+		b.Write(strconv.AppendUint(buf[:0], uint64(x), 10))
 	case uint32:
-		return strconv.FormatUint(uint64(x), 10)
+		b.Write(strconv.AppendUint(buf[:0], uint64(x), 10))
 	case uint64:
-		return strconv.FormatUint(uint64(x), 10)
+		b.Write(strconv.AppendUint(buf[:0], x, 10))
 	case float32:
-		return strconv.FormatFloat(float64(x), 'f', 6, 32)
+		b.Write(strconv.AppendFloat(buf[:0], float64(x), 'f', 6, 32))
 	case float64:
-		return strconv.FormatFloat(x, 'f', 6, 64)
+		b.Write(strconv.AppendFloat(buf[:0], x, 'f', 6, 64))
 	case []byte:
-		return string(x)
+		b.Write(x)
 	case []rune:
-		return string(x)
+		b.WriteString(string(x))
 	case []int:
-		return intsToString(x)
+		intsToString(b, x)
 	case []int64:
-		return int64sToString(x)
+		intsToString(b, x)
 	case []string:
-		return stringsToString(x)
+		stringsToString(b, x)
 	case []interface{}:
-		return f.strings(x)
+		f.strings(b, x)
 	case nil:
-		return ""
 	default:
-		return fmt.Sprint(x)
+		b.WriteString(fmt.Sprint(x))
 	}
 }
 
 // strings converts []interface{} to a string.
 // For example: []interface{}{"name", "surname", []string{"age"}} => "name, surname, age"
-func (f *formatter) strings(x []interface{}) string {
+func (f *formatter) strings(b *strings.Builder, x []interface{}) {
 	var n int
 	if n = len(x); n == 0 {
-		return ""
+		return
 	}
-	var b strings.Builder
-	b.WriteString(f.toString(x[0]))
+	f.toString(b, x[0])
 	for i := 1; i < n; i++ {
 		b.WriteString(", ")
-		b.WriteString(f.toString(x[i]))
+		f.toString(b, x[i])
 	}
-	return b.String()
 }

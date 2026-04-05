@@ -3,7 +3,6 @@ package qp
 import (
 	"strconv"
 	"strings"
-	"unsafe"
 )
 
 // intWeight returns the number of digits in an int.
@@ -18,58 +17,47 @@ func intWeight(x int) int {
 	return 19
 }
 
-// intsToString converts []int to a string.
+// intsToString converts []int or []int64 to a string.
 // For example: []int{1, 2, 3, 4} => "1, 2, 3, 4"
-func intsToString(x []int) string {
+func intsToString[T int | int64](b *strings.Builder, x []T) {
 	var n int
 	if n = len(x); n == 0 {
-		return ""
+		return
 	}
-	var b = make([]byte, 0, n*3-2)
-	b = strconv.AppendInt(b, int64(x[0]), 10)
+	var buf [32]byte
+	b.Write(strconv.AppendInt(buf[:0], int64(x[0]), 10))
 	for i := 1; i < n; i++ {
-		b = append(b, ',', ' ')
-		b = strconv.AppendInt(b, int64(x[i]), 10)
+		b.WriteString(", ")
+		b.Write(strconv.AppendInt(buf[:0], int64(x[i]), 10))
 	}
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-// int64sToString converts []int64 to a string.
-// For example: []int64{1, 2, 3, 4} => "1, 2, 3, 4"
-func int64sToString(x []int64) string {
-	var n int
-	if n = len(x); n == 0 {
-		return ""
-	}
-	var b = make([]byte, 0, n*3-2)
-	b = strconv.AppendInt(b, x[0], 10)
-	for i := 1; i < n; i++ {
-		b = append(b, ',', ' ')
-		b = strconv.AppendInt(b, x[i], 10)
-	}
-	return *(*string)(unsafe.Pointer(&b))
 }
 
 // stringsToString converts []string to a string.
 // For example: []string{"name", "surname", "age"} => "name, surname, age"
-func stringsToString(x []string) string {
+func stringsToString(b *strings.Builder, x []string) {
 	var n int
 	if n = len(x); n == 0 {
-		return ""
+		return
 	}
-	var b strings.Builder
 	b.WriteString(x[0])
 	for i := 1; i < n; i++ {
 		b.WriteString(", ")
 		b.WriteString(x[i])
 	}
-	return b.String()
 }
 
 // atoi converts a string to an int.
 func atoi(s string) int {
 	var num, err = strconv.Atoi(s)
 	return ternary(err == nil, num, 0)
+}
+
+// advanceParam verifies index and returns the next index.
+func advanceParam(p, idx int) int {
+	if idx == p {
+		return p + 1
+	}
+	return p
 }
 
 // count returns the number of placeholders needed for a value.
