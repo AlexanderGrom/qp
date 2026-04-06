@@ -1,6 +1,7 @@
 package qp
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,7 @@ func TestFormatter_Spread(t *testing.T) {
 
 func TestFormatter_DefaultDriver(t *testing.T) {
 	DefaultDriver("mysql")
+	defer DefaultDriver("postgres")
 	b := Format("name = %p", "Tom")
 	q := Format(
 		"SELECT id FROM table WHERE status = %p AND %s LIMIT %p, OFFSET %p",
@@ -53,7 +55,6 @@ func TestFormatter_DefaultDriver(t *testing.T) {
 		[]interface{}{"active", "Tom", 10, 0},
 		q.Params(),
 	)
-	DefaultDriver("postgres")
 }
 
 func TestFormatter_Driver(t *testing.T) {
@@ -255,6 +256,212 @@ func TestFormatter_Idempotency(t *testing.T) {
 	)
 }
 
+func TestFormatter_IndexedPlaceholderRepeat(t *testing.T) {
+	q := Format("name = %[1]p AND nickname = %[1]p", "Tom")
+	assert.Equal(t,
+		`name = $1 AND nickname = $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom"},
+		q.Params(),
+	)
+	assert.Equal(t,
+		`name = $1 AND nickname = $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedVerbsShareValue(t *testing.T) {
+	q := Format("name = %[1]p AND nickname = %[1]s", "Tom")
+	assert.Equal(t,
+		`name = $1 AND nickname = Tom`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedLargeLabel(t *testing.T) {
+	q := Format("name = %[99]p AND nickname = %[99]p", "Tom")
+	assert.Equal(t,
+		`name = $1 AND nickname = $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedLabelsPerFormat(t *testing.T) {
+	q := Format("name = %[1]p", "Tom").Format("nickname = %[1]p", "Huck")
+	assert.Equal(t,
+		`name = $1 AND nickname = $2`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedMixedVerbs(t *testing.T) {
+	q := Format("%[2]p, %[1]p, %p", "Tom", "Huck", "Becky")
+	assert.Equal(t,
+		`$1, $2, $3`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Huck", "Becky"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedRepeatDoesNotAdvanceNextParam(t *testing.T) {
+	q := Format("%[1]p, %[1]p, %p", "Tom", "Huck")
+	assert.Equal(t,
+		`$1, $2, $3`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom", "Huck"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedRepeatStringDoesNotAdvanceNextParam(t *testing.T) {
+	q := Format("%[1]s, %[1]s, %s", "Tom", "Huck")
+	assert.Equal(t,
+		`Tom, Tom, Huck`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedNestedFormat(t *testing.T) {
+	b := Format("name = %[1]p", "Tom").Format("nickname = %[1]p", "Huck")
+	q := Format(
+		"WHERE status = %[1]p AND %s LIMIT %p",
+		"active", b, 10,
+	)
+	assert.Equal(t,
+		`WHERE status = $1 AND name = $2 AND nickname = $3 LIMIT $4`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"active", "Tom", "Huck", 10},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedNestedFormat2(t *testing.T) {
+	b := Format("name = %p", "Tom")
+	q := Format(
+		"(%[1]s) OR (%[1]s)",
+		b,
+	)
+	assert.Equal(t,
+		`(name = $1) OR (name = $2)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedMySQL(t *testing.T) {
+	DefaultDriver("mysql")
+	defer DefaultDriver("postgres")
+
+	q := Format("name = %[1]p AND nickname = %[1]p", "Tom")
+	assert.Equal(t,
+		"name = ? AND nickname = ?",
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{"Tom", "Tom"},
+		q.Params(),
+	)
+}
+
+func TestFormatter_IndexedSpreadIgnored(t *testing.T) {
+	q := Format("id IN (%[1]+p)", 1)
+	assert.Equal(t,
+		`id IN ($1)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1},
+		q.Params(),
+	)
+
+	q = Format("id IN (%+[1]p)", 1)
+	assert.Equal(t,
+		`id IN ($1)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1},
+		q.Params(),
+	)
+
+	q = Format("id IN (%[1]+p, %+[1]p)", 1)
+	assert.Equal(t,
+		`id IN ($1, $2)`,
+		q.String(),
+	)
+	assert.Equal(t,
+		[]interface{}{1, 1},
+		q.Params(),
+	)
+}
+
+func TestFormatter_ParameterNotFound(t *testing.T) {
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("name = %p AND age = %p", "Tom").String() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("name = %p AND age = %p", "Tom").Params() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("name = %[1]p AND age = %[2]p", "Tom").String() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("name = %[1]p AND age = %[2]p", "Tom").Params() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("id = %+p").String() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("id = %p").Params() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("id IN (%+p)").String() },
+	)
+	assert.PanicsWithValue(t,
+		"qp: parameter not found",
+		func() { _ = Format("id IN (%+p)").Params() },
+	)
+}
+
 func TestFormatter_Verbs(t *testing.T) {
 	b := Format("(%+p)", 1, 2, 3).Format("(%p)", []int{4, 5, 6}).Jumper(", ")
 	q := Format(
@@ -306,11 +513,11 @@ func TestFormatter_Verbs3(t *testing.T) {
 
 func TestFormatter_Verbs4(t *testing.T) {
 	q := Format(
-		"%p, %s, %%s, %%, %%+s, %+%s, %%p, %+%p, %+++s, %%p",
+		"%p, %s, %%s, %%, %%+s, %+%s, %%p, %+%p, %+++s, %%p, %[1]%p, %[1]%s, %+[1]%p, %[word]p",
 		"one", "two", 1, 2, 3,
 	)
 	assert.Equal(t,
-		`$1, two, %s, %, %+s, %+%s, %p, %+%p, 1, 2, 3, %p`,
+		`$1, two, %s, %, %+s, %+%s, %p, %+%p, 1, 2, 3, %p, %[1]%p, %[1]%s, %+[1]%p, %[word]p`,
 		q.String(),
 	)
 	assert.Equal(t,
@@ -434,8 +641,9 @@ func TestUtils_toString(t *testing.T) {
 	var format = new(formatter)
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			var output = format.toString(tt.input)
-			assert.Equal(t, tt.output, output)
+			var b strings.Builder
+			format.toString(&b, tt.input)
+			assert.Equal(t, tt.output, b.String())
 		})
 	}
 }

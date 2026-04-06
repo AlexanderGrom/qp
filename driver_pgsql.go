@@ -5,6 +5,8 @@ import (
 	"unsafe"
 )
 
+var pgsqlPreAlloc [128]string
+
 type pgsqlDriver struct {
 	placeholders int
 }
@@ -13,27 +15,37 @@ var _ Driver = (*pgsqlDriver)(nil)
 
 func init() {
 	RegisterDriver("postgres", PgsqlDriver)
+	pgsqlPreAllocate()
 }
 
-// PgsqlDriver returns a specific Driver for postgresql
+// PgsqlDriver returns a Driver for PostgreSQL.
 func PgsqlDriver() Driver {
 	return &pgsqlDriver{}
 }
 
-// Placeholder returns n count placeholders
+// placeholder increments and returns the next placeholder number.
 func (d *pgsqlDriver) placeholder() int {
 	d.placeholders++
 	return d.placeholders
 }
 
-// Placeholder returns string of placeholders
+// next returns the next placeholder string.
+func (d *pgsqlDriver) next() string {
+	var p = d.placeholder()
+	if p < len(pgsqlPreAlloc) {
+		return pgsqlPreAlloc[p]
+	}
+	return "$" + strconv.Itoa(p)
+}
+
+// Placeholder returns one or more PostgreSQL placeholders.
 func (d *pgsqlDriver) Placeholder(x interface{}) string {
 	var n int
 	switch n = count(x); n {
 	case 0:
 		return ""
 	case 1:
-		return "$" + strconv.Itoa(d.placeholder())
+		return d.next()
 	}
 
 	var (
@@ -53,4 +65,10 @@ func (d *pgsqlDriver) Placeholder(x interface{}) string {
 	}
 
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+func pgsqlPreAllocate() {
+	for i := 1; i < len(pgsqlPreAlloc); i++ {
+		pgsqlPreAlloc[i] = "$" + strconv.Itoa(i)
+	}
 }

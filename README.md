@@ -15,7 +15,7 @@ var b = qp.
     Format("name = %p", "Tom").
     Format("age IN (%+p)", 18, 21, 30)
 
-var q = qp.Query("SELECT id FROM table WHERE %s LIMIT %p", b, 10)
+var q = qp.Format("SELECT id FROM table WHERE %s LIMIT %p", b, 10)
 _ = q.String() // SELECT id FROM table WHERE name = $1 AND age IN ($2, $3, $4) LIMIT $5
 _ = q.Params() // ["Tom", 18, 21, 30, 10]
 ```
@@ -28,7 +28,7 @@ _ = q.Params() // ["Tom", 18, 21, 30, 10]
 
 ## The modifiers
 ```
-+		capture all parameters
++		capture all parameters (ignored with with indexed verbs)
 ```
 
 ## Examples
@@ -49,10 +49,16 @@ qp.Format("ints: %p", []int64{1, 2, 3}).String() // ints: $1, $2, $3
 ### Modifiers
 ```go
 qp.Format("fields: %+s", "id", "name", "age").String() // fields: id, name, age
-qp.Format("params: %+p", "id", "name", "age").String() // fields: $1, $2, $3
+qp.Format("params: %+p", "id", "name", "age").String() // params: $1, $2, $3
 ```
 
-### Some more complicated examples
+### Indexed arguments
+```go
+qp.Format("name = %[99]s OR nickname = %[99]s", "Tom").String() // name = Tom OR nickname = Tom
+qp.Format("name = %[99]p OR nickname = %[99]p", "Tom").String() // name = $1 OR nickname = $2
+```
+
+### Some more complex examples
 ```go
 qp.Format("params: %p", []interface{}{1, 2, 3, "four", []int{5, 6}}).String() // params: $1, $2, $3, $4, $5, $6
 qp.Format("params: %+p", []int64{1, 2, 3}, 4).String() // params: $1, $2, $3, $4
