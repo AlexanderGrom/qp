@@ -557,6 +557,18 @@ func TestFormatter_Verbs6(t *testing.T) {
 	)
 }
 
+func TestFormatter_EmptyNew(t *testing.T) {
+	q := New()
+	assert.Equal(t, "", q.String())
+	assert.Equal(t, []interface{}{}, q.Params())
+}
+
+func TestFormatter_EmptyNewJumper(t *testing.T) {
+	q := New().Jumper(", ")
+	assert.Equal(t, "", q.String())
+	assert.Equal(t, []interface{}{}, q.Params())
+}
+
 func TestUtils_toString(t *testing.T) {
 	var testCases = []struct {
 		name   string

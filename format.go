@@ -350,7 +350,7 @@ func (f *formatter) formatsCap() int {
 			cap += f.valueStringCap(v)
 		}
 	}
-	cap += len(f.jumper) * (len(f.format) - 1)
+	cap += len(f.jumper) * max(len(f.format)-1, 0)
 	return cap
 }
 
